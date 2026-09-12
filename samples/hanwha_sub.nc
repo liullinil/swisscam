@@ -1,0 +1,225 @@
+%
+O0001 (Hanwha)
+G40 G80 G99 G18 T0
+G310Z175T2100
+N10( COMMENT    "Bar feeding 1" )
+
+N20( COMMENT    "ID Roughing 1" )
+T2424( Custom )
+G50 S1000
+G96 S150 M03
+G00 X-21.6
+Z93.3
+X-19.6
+G99 G01 Z61.831 F0.5 M08
+X-19.662 Z61.8
+X-21.6
+X-22.2 Z62.1
+G00 Z93.3
+X-17.6
+G01 Z62.3
+X-18.662
+X-19.6 Z61.831
+X-20.2 Z62.131
+G00 Z93.3
+X-15.6
+G01 Z62.3
+X-17.6
+X-18.2 Z62.6
+G00 Z93.3
+X-13.6
+G01 Z62.3
+X-15.6
+X-16.2 Z62.6
+G00 Z93.3
+X-11.6
+G01 Z91.831
+X-12.6 Z91.331
+Z62.3
+X-13.6
+X-14.2 Z62.6
+G00 Z93.
+X-11.
+G01 Z91.531
+X-12. Z91.031
+Z62.
+X-18.062
+X-19.062 Z61.5
+X-21.
+G00 G28 W0.
+M01
+
+N30( COMMENT    "Lathe hole machining 1" )
+T2525( 6mm Drill )
+M05
+G97 S531 M04
+G00 X0.
+Z102.007
+G74 R1.
+G74 Z44. Q58.007 F200
+M05
+G28 W0.
+M01
+N40( COMMENT    "OD Roughing 1" )
+
+G340 (eject)
+T2100
+S50 M4
+M28
+G04 P3000
+G99
+M01
+
+M500
+N50( COMMENT    "pick-and-place for lathes 1" )
+T2100( Empty gripper )
+G97 S200 M04
+M21 (sub collet open)
+G04 P200
+G00 X0.
+Z11.
+M501
+M502
+G98 G01 Z-4. F200
+M503
+M221 (Sync Z1/Z2)
+M504
+M28 (Air)
+G04 P500
+M20 (sub collet close)
+G04 P200
+M11 (main collet open)
+G04 P200
+M505
+M220 (Desync Z1/Z2)
+M506
+(move Z1)
+M507
+M221 (Sync Z1/Z2)
+M508
+M28 (Air)
+G04 P500
+M10 (main collet close)
+G04 P200
+G00 M05
+M509
+M01
+N60( COMMENT    "OD Roughing 2" )
+N70( COMMENT    "OD Grooving 1" )
+
+M510
+N80( COMMENT    "pick-and-place for lathes 2" )
+T2100( Empty gripper )
+G97 S200 M04
+M21 (sub collet open)
+G04 P200
+G00 X0.
+M511
+M220 (Desync Z1/Z2)
+M512
+Z-20.
+M513
+M514
+G01 Z-25. F200
+M515
+M221 (Sync Z1/Z2)
+M516
+M28 (Air)
+G04 P500
+M20 (sub collet close)
+G04 P200
+M11 (main collet open)
+G04 P200
+M517
+M220 (Desync Z1/Z2)
+M518
+(move Z1)
+M519
+M221 (Sync Z1/Z2)
+M520
+M28 (Air)
+G04 P500
+M10 (main collet close)
+G04 P200
+G00 M05
+M521
+M01
+N90( COMMENT    "OD Roughing 3" )
+N100( COMMENT    "OD Grooving 2" )
+
+M522
+N110( COMMENT    "Sub spindle working 1" )
+T2100( Empty gripper )
+G97 S200 M04
+M21 (sub collet open)
+G04 P200
+G00 X0.
+M523
+M220 (Desync Z1/Z2)
+M524
+Z-35.
+M525
+M526
+G01 Z-40. F200
+M527
+M221 (Sync Z1/Z2)
+M528
+M28 (Air)
+G04 P500
+M20 (sub collet close)
+G04 P200
+M11 (main collet open)
+G04 P200
+M529
+M220 (Desync Z1/Z2)
+M530
+(move Z1)
+M531
+M221 (Sync Z1/Z2)
+M532
+M28 (Air)
+G04 P500
+M10 (main collet close)
+G04 P200
+G00 M05
+M533
+M01
+N120( COMMENT    "OD Roughing 4" )
+N130( COMMENT    "Lathe part-off 1" )
+
+N140( COMMENT    "MTM take over 1" )
+T2100( Empty gripper )
+G97 S200 M03
+M534
+M535
+M28 (Air)
+M21 (sub collet open)
+G04 P200
+G00 X0.
+Z-40.
+G01 Z-60. F200
+M28 (Air)
+G04 P500
+M20 (sub collet close)
+G04 P200
+M536
+M221 (Sync Z1/Z2)
+M537
+M538
+M220 (Desync Z1/Z2)
+M539
+S40
+M540
+M36
+G04 P500
+W2.
+M541
+M95
+/M91
+M96
+M05
+G00 G28 W0.
+M01
+M599
+M30
+%

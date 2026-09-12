@@ -1,5 +1,6 @@
-node_modules/
-dist/
-.vite/
-*.log
+.godot/
+build/
+export/
+*.translation
 .DS_Store
+*.log
