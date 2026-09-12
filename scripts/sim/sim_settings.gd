@@ -61,7 +61,7 @@ static func from_ops(ops_by_channel: Dictionary, tools_table: ToolTable) -> SimS
 	s.bar_diameter = maxf(snappedf(bar, 0.5), 1.0)
 	if s.bar_diameter < bar:
 		s.bar_diameter += 0.5
-	s.guesses.append("пруток ⌀%.1f — по наибольшему диаметру в программе" % s.bar_diameter)
+	s.guesses.append("пруток Ø%.1f — по наибольшему диаметру в программе" % s.bar_diameter)
 
 	# Свободный торец — там, где инструмент впервые входит в материал.
 	# С этой стороны заготовка заканчивается сразу за крайним резом,

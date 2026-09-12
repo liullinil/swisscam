@@ -74,6 +74,21 @@ func _initialize() -> void:
 		print("  отрезка на Z%.3f" % job.sim.final_cutoff_z)
 
 	print("")
+	print("--- профиль готовой детали ---")
+	job.sim.seek(job.sim.items.size() - 1)
+	var probe := [0.0, 15.0, 25.0, 31.0, 35.0, 40.0, 50.0, 55.0, 70.0, 90.0, 95.0, 96.0, 100.0]
+	var line := PackedStringArray()
+	for z in probe:
+		var i: int = job.sim.stock.index_of(z)
+		if i < 0 or i >= job.sim.stock.samples:
+			continue
+		var ro: float = job.sim.stock.outer(i)
+		var ri: float = job.sim.stock.inner(i)
+		var hole := "" if ri <= 0.001 else "/отв⌀%.1f" % (ri * 2.0)
+		line.append("Z%.0f:⌀%.2f%s" % [z, ro * 2.0, hole])
+	print("  " + "  ".join(line))
+
+	print("")
 	print("--- замечания: %d ошибок, %d предупреждений ---" % [job.error_count(), job.warning_count()])
 	var shown := 0
 	var seen := {}
