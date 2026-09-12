@@ -21,13 +21,15 @@ var sim_time := 0.0
 var _last_index := -1
 var _highlighted_lines := {}
 var _bar_override := 0.0
+## Правки таблицы инструмента переживают перенабор текста: id -> {kind, width, nose_r, diameter}
+var tool_overrides := {}
 
 var code_edit: CodeEdit
 var channel_tabs: TabBar
 var stock_view: StockView
 var gantt: GanttView
 var diag_list: ItemList
-var tool_list: ItemList
+var tool_tree: Tree
 var section_list: ItemList
 var stats_label: RichTextLabel
 var guess_label: Label
@@ -141,6 +143,11 @@ func _build_toolbar() -> Control:
 	open_btn.pressed.connect(_on_open_pressed)
 	bar.add_child(open_btn)
 
+	var save_btn := Button.new()
+	save_btn.text = "Сохранить"
+	save_btn.pressed.connect(_on_save_pressed)
+	bar.add_child(save_btn)
+
 	var sample_btn := Button.new()
 	sample_btn.text = "Эталон Hanwha"
 	sample_btn.pressed.connect(func() -> void:
@@ -176,6 +183,8 @@ func _build_editor_pane() -> Control:
 	code_edit.add_theme_color_override("background_color", Color("14171c"))
 	code_edit.add_theme_font_size_override("font_size", 13)
 	code_edit.text_changed.connect(_on_text_changed)
+	code_edit.gui_input.connect(_on_code_input)
+	code_edit.tooltip_text = "Двойной щелчок по кадру — перемотать модель на этот кадр"
 	box.add_child(code_edit)
 	return box
 
@@ -218,9 +227,20 @@ func _build_view_pane() -> Control:
 	diag_list.item_selected.connect(_on_diag_selected)
 	tabs.add_child(diag_list)
 
-	tool_list = ItemList.new()
-	tool_list.name = "Инструмент"
-	tabs.add_child(tool_list)
+	tool_tree = Tree.new()
+	tool_tree.name = "Инструмент"
+	tool_tree.columns = 6
+	tool_tree.column_titles_visible = true
+	tool_tree.hide_root = true
+	tool_tree.set_column_title(0, "Инструмент")
+	tool_tree.set_column_title(1, "Тип")
+	tool_tree.set_column_title(2, "Ширина кромки")
+	tool_tree.set_column_title(3, "Радиус вершины")
+	tool_tree.set_column_title(4, "Ø сверла")
+	tool_tree.set_column_title(5, "Откуда")
+	tool_tree.set_column_expand_ratio(0, 3)
+	tool_tree.item_edited.connect(_on_tool_edited)
+	tabs.add_child(tool_tree)
 
 	section_list = ItemList.new()
 	section_list.name = "Разделы"
@@ -353,6 +373,29 @@ func _on_open_pressed() -> void:
 	file_dialog.popup_centered_ratio(0.7)
 
 
+func _on_save_pressed() -> void:
+	if not sources.has(current_channel):
+		return
+	var name: String = sources[current_channel]["name"]
+	if WebFiles.available():
+		WebFiles.download_text(name, code_edit.text)
+		return
+	var dialog := FileDialog.new()
+	dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	dialog.access = FileDialog.ACCESS_FILESYSTEM
+	dialog.current_file = name
+	dialog.file_selected.connect(func(path: String) -> void:
+		var f := FileAccess.open(path, FileAccess.WRITE)
+		if f != null:
+			f.store_string(code_edit.text)
+			sources[current_channel]["name"] = path.get_file()
+			_refresh_tabs()
+		dialog.queue_free())
+	dialog.canceled.connect(dialog.queue_free)
+	add_child(dialog)
+	dialog.popup_centered_ratio(0.7)
+
+
 func _on_files_chosen(paths: PackedStringArray) -> void:
 	var loaded := []
 	for p in paths:
@@ -403,9 +446,15 @@ func _rebuild() -> void:
 		return
 
 	job = GJob.build(srcs, dialect, null)
-	# Диаметр прутка, введённый руками, важнее догадки по программе
+	# Правки технолога важнее догадок: диаметр прутка и таблица инструмента
+	var need_resim := false
 	if _bar_override > 0.0 and not is_equal_approx(_bar_override, job.settings.bar_diameter):
 		job.settings.bar_diameter = _bar_override
+		need_resim = true
+	if not tool_overrides.is_empty():
+		_apply_tool_overrides()
+		need_resim = true
+	if need_resim:
 		job.sim = Simulation.create(job.timeline, job.settings)
 
 	_refresh_tabs()
@@ -456,25 +505,82 @@ func _refresh_lists() -> void:
 		diag_list.set_item_custom_fg_color(idx, d.color())
 		diag_list.set_item_metadata(idx, {"line": d.line, "channel": d.channel})
 
-	tool_list.clear()
-	for id in job.tools.ids_sorted():
-		var t: ToolDef = job.tools.tools[id]
-		var extra := ""
-		if t.kind == ToolDef.Kind.DRILL:
-			extra = "   Ø%.1f" % t.diameter
-		elif t.width > 0.0:
-			extra = "   ширина %.1f" % t.width
-		if t.nose_r > 0.0:
-			extra += "   r%.2f" % t.nose_r
-		if not t.from_header:
-			extra += "   (определён по движениям)"
-		tool_list.add_item(t.describe() + extra)
+	_refresh_tools()
 
 	section_list.clear()
 	for ch in job.channels:
 		for s in ch.sections():
 			var idx := section_list.add_item("$%s  %s" % [ch.id, s["name"]])
 			section_list.set_item_metadata(idx, {"line": s["line"], "channel": ch.id})
+
+
+const KIND_NAMES := "проходной,канавочный,отрезной,сверло,резьбовой,приводной,захват"
+
+
+## Таблицу инструмента можно править: ширина отрезной кромки и диаметр сверла
+## меняют форму детали, а программа о них чаще всего молчит.
+func _refresh_tools() -> void:
+	tool_tree.clear()
+	var root := tool_tree.create_item()
+	for id in job.tools.ids_sorted():
+		var t: ToolDef = job.tools.tools[id]
+		var item := tool_tree.create_item(root)
+		item.set_metadata(0, id)
+		item.set_text(0, "T%02d  %s" % [t.id, t.name])
+
+		item.set_cell_mode(1, TreeItem.CELL_MODE_RANGE)
+		item.set_text(1, KIND_NAMES)
+		item.set_range(1, float(t.kind))
+		item.set_editable(1, true)
+
+		_set_number_cell(item, 2, t.width, 0.0, 20.0, 0.1)
+		_set_number_cell(item, 3, t.nose_r, 0.0, 5.0, 0.05)
+		_set_number_cell(item, 4, t.diameter, 0.0, 60.0, 0.1)
+
+		item.set_text(5, "из программы" if t.from_header else "по движениям")
+		item.set_custom_color(5, Color("8d97a8") if t.from_header else Color("ffc857"))
+
+
+func _set_number_cell(item: TreeItem, column: int, value: float, lo: float, hi: float, step: float) -> void:
+	item.set_cell_mode(column, TreeItem.CELL_MODE_RANGE)
+	item.set_range_config(column, lo, hi, step)
+	item.set_range(column, value)
+	item.set_editable(column, true)
+
+
+func _on_tool_edited() -> void:
+	var item := tool_tree.get_edited()
+	if item == null or job == null:
+		return
+	var id: int = item.get_metadata(0)
+	var t: ToolDef = job.tools.get_tool(id)
+	t.kind = int(item.get_range(1)) as ToolDef.Kind
+	t.width = item.get_range(2)
+	t.nose_r = item.get_range(3)
+	t.diameter = item.get_range(4)
+	tool_overrides[id] = {"kind": t.kind, "width": t.width, "nose_r": t.nose_r, "diameter": t.diameter}
+	_resimulate()
+
+
+## Пересчитывает только съём материала: разбор и расписание не меняются.
+func _resimulate() -> void:
+	job.sim = Simulation.create(job.timeline, job.settings)
+	stock_view.set_job(job)
+	_last_index = -1
+	_on_seek_time(sim_time)
+	_refresh_stats()
+
+
+func _apply_tool_overrides() -> void:
+	for id in tool_overrides.keys():
+		if not job.tools.tools.has(id):
+			continue
+		var t: ToolDef = job.tools.tools[id]
+		var o: Dictionary = tool_overrides[id]
+		t.kind = o["kind"]
+		t.width = o["width"]
+		t.nose_r = o["nose_r"]
+		t.diameter = o["diameter"]
 
 
 func _refresh_stats() -> void:
@@ -503,6 +609,27 @@ func _on_text_changed() -> void:
 	rebuild_timer.start()
 
 
+## Двойной щелчок по кадру перематывает модель на него: так проверяют,
+## что именно снял конкретный проход.
+func _on_code_input(event: InputEvent) -> void:
+	if job == null:
+		return
+	if not (event is InputEventMouseButton and event.double_click and event.button_index == MOUSE_BUTTON_LEFT):
+		return
+	var line := code_edit.get_line_column_at_pos(event.position).y
+	var slots: Array = job.timeline.by_channel.get(current_channel, [])
+	var best: GSlot = null
+	for slot: GSlot in slots:
+		if slot.op.line == line:
+			best = slot
+			break
+		if slot.op.line > line and best == null:
+			best = slot
+			break
+	if best != null:
+		_on_seek_time(best.start)
+
+
 func _on_channel_changed(tab: int) -> void:
 	var ids := sources.keys()
 	ids.sort()
@@ -524,10 +651,7 @@ func _on_bar_changed(value: float) -> void:
 		return
 	_bar_override = value
 	job.settings.bar_diameter = value
-	job.sim = Simulation.create(job.timeline, job.settings)
-	stock_view.set_job(job)
-	_on_seek_time(sim_time)
-	_refresh_stats()
+	_resimulate()
 
 
 func _on_diag_selected(index: int) -> void:
