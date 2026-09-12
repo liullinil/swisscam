@@ -40,6 +40,7 @@ var bar_spin: SpinBox
 var dialect_option: OptionButton
 var file_dialog: FileDialog
 var rebuild_timer: Timer
+var bottom_tabs: TabContainer
 var _suppress_text_signal := false
 
 
@@ -65,6 +66,8 @@ func _setup_screenshot() -> void:
 			_shot_frames = int(a.substr(9))
 		elif a.begins_with("--at="):
 			at = a.substr(5).to_float()
+		elif a.begins_with("--tab="):
+			bottom_tabs.current_tab = int(a.substr(6))
 	if _shot_path.is_empty():
 		return
 	if _shot_frames <= 0:
@@ -247,6 +250,7 @@ func _build_view_pane() -> Control:
 	section_list.item_selected.connect(_on_section_selected)
 	tabs.add_child(section_list)
 
+	bottom_tabs = tabs
 	bottom.add_child(tabs)
 	split.add_child(bottom)
 	return split
